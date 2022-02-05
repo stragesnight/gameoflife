@@ -2,8 +2,6 @@
  * 	game of life implementation
  * 	by ishiki
  *
- *	compile command: gcc main.c -lpthread -o gameoflife
- *
  *	controls:
  *	  r - reset game field
  *	  p - pause
