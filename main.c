@@ -21,6 +21,9 @@
 #include <sys/ioctl.h>
 #include <stdatomic.h>
 
+//#define SPEED_TEST
+#define SPEED_TEST_ITERATIONS 100000
+
 typedef unsigned char bool;
 #define true (bool)1
 #define false (bool)0
@@ -67,10 +70,12 @@ static void my_exit(void)
 	free(field);
 	free(prev_field);
 
+#ifndef SPEED_TEST
 	// reset terminal IO
 	reset_termios();
 	// kill input catcher thread
 	pthread_kill(pthread_input_id, 0);
+#endif /* SPEED_TEST */
 	// move cursor to [1;1]
 	puts("\033[1;1H\033[J");
 	// exit program
@@ -143,6 +148,7 @@ static char get_cell(int x, int y)
 static inline ushort get_nneighbours(int x, int y)
 {
 	int nneighbours = 0;
+
 	nneighbours += get_cell(x + 1, y) != ' ';
 	nneighbours += get_cell(x - 1, y) != ' ';
 	nneighbours += get_cell(x, y + 1) != ' ';
@@ -183,17 +189,20 @@ static inline void iteration()
 
 int main(void)
 {
+	// get console buffer size
+	ioctl(STDOUT_FILENO, TIOCGWINSZ, &term_size);
+
+#ifndef SPEED_TEST
+	// initialize console
+	init_termios();
 	// initialize atomic variables
 	main_lock = ATOMIC_VAR_INIT(0);
 	keep_running = ATOMIC_VAR_INIT(1);
-
-	// initialize console
-	init_termios();
-	ioctl(STDOUT_FILENO, TIOCGWINSZ, &term_size);
 	// start input catcher thread
 	pthread_create(&pthread_input_id, NULL, pthread_input, NULL);
 	// catch SIGINT
 	signal(SIGINT, catch_sigint);
+#endif /* SPEED_TEST */
 
 	srand(time(0));
 
@@ -214,15 +223,24 @@ int main(void)
 	init_field();
 
 	// main loop
+#ifdef SPEED_TEST
+	for (size_t i = 0; i < SPEED_TEST_ITERATIONS; ++i) {
+#else /* !SPEED_TEST */
 	while (keep_running) {
+#endif /* SPEED_TEST */
+#ifndef SPEED_TEST
 		// wait for thread to be unlocked
 		while (main_lock)
 			usleep(10);
+#endif /* SPEED_TEST */
 
 		// iterate game state
 		iteration();
+
+#ifndef SPEED_TEST
 		// sleep for 50 ms
 		usleep(50000);
+#endif /* SPEED_TEST */
 	}
 
 	my_exit();
