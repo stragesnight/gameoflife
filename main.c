@@ -21,8 +21,7 @@
 #include <sys/ioctl.h>
 #include <stdatomic.h>
 
-//#define SPEED_TEST
-#define SPEED_TEST_ITERATIONS 100000
+#define ITERATIONS 50000
 
 typedef unsigned char bool;
 #define true (bool)1
@@ -224,7 +223,7 @@ int main(void)
 
 	// main loop
 #ifdef SPEED_TEST
-	for (size_t i = 0; i < SPEED_TEST_ITERATIONS; ++i) {
+	for (size_t i = 0; i < ITERATIONS; ++i) {
 #else /* !SPEED_TEST */
 	while (keep_running) {
 #endif /* SPEED_TEST */
