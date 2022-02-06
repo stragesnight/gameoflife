@@ -25,13 +25,16 @@ typedef unsigned char bool;
 #define true (bool)1
 #define false (bool)0
 
-static struct winsize term_size;		// terminal buffer size
+static ushort width; 	 			// width of the game field
+static ushort height; 				// height of the game field
+static ushort buffer_size; 			// size of the game field buffer
+
 static pthread_t pthread_input_id;		// input catcher thread
 static volatile atomic_uint main_lock = 0; 	// lock for main thread
 static volatile atomic_uint keep_running = 1; 	// controls when program should terminate
 
-static char **prev_field; 	// previous state of the game field
-static char **field; 		// current state of the game field
+static char *prev_field; 	// previous state of the game field
+static char *field; 		// current state of the game field
 
 // initialize terminal IO
 static void init_termios(void)
@@ -60,10 +63,6 @@ static void my_exit(void)
 {
 	printf("exit\n");
 	// free allocated game field memory
-	for (int i = 0; i < term_size.ws_row; ++i) {
-		free(field[i]);
-		free(prev_field[i]);
-	}
 	free(field);
 	free(prev_field);
 
@@ -89,9 +88,9 @@ static void catch_sigint(int signo)
 // initialize game field with random cells
 static inline void init_field(void)
 {
-	for (ushort y = 0; y < term_size.ws_row; ++y) {
-		for (ushort x = 0; x < term_size.ws_col; ++x)
-			prev_field[y][x] = (rand() & 1) ? '#' : ' ';
+	for (ushort y = 0; y < height; ++y) {
+		for (ushort x = 0; x < width; ++x)
+			prev_field[y * height + x] = (rand() & 1) ? '#' : ' ';
 	}
 }
 
@@ -129,16 +128,16 @@ void *pthread_input(void *args)
 static char get_cell(int x, int y)
 {
 	// wrap coordinates if out of bounds
-	if (x >= term_size.ws_col)
+	if (x >= width)
 		x = 0;
 	else if (x < 0)
-		x = term_size.ws_col - 1;
-	if (y >= term_size.ws_row)
+		x = width - 1;
+	if (y >= height)
 		y = 0;
 	else if (y < 0)
-		y = term_size.ws_row - 1;
+		y = height - 1;
 
-	return prev_field[y][x];
+	return prev_field[y * height + x];
 }
 
 // get number of alive neighbours around given coordinates
@@ -164,30 +163,33 @@ static inline void iteration()
 	// move cursor to [1;1]
 	puts("\033[1;1H\033[J");
 
-	for (ushort y = 0; y < term_size.ws_row; ++y) {
-		for (ushort x = 0; x < term_size.ws_col; ++x) {
+	for (ushort y = 0; y < height; ++y) {
+		for (ushort x = 0; x < width; ++x) {
 			// cell is alive if:
 			// - it has 3 neighbours, or
 			// - it has 2 neighbours and is currently alive
 			unsigned n = get_nneighbours(x, y);
 			bool alive = get_cell(x, y) != ' ';
 			char c = ((n == 2 && alive) || n == 3) ? '#' : ' ';
-			field[y][x] = c;
-			putchar(field[y][x]);
+			field[y * height + x] = c;
+			putchar(c);
 		}
 		putchar('\n');
 	}
 	putchar('\b');
 
-	// copy previous state to current
-	for (ushort y = 0; y < term_size.ws_row; ++y)
-		memcpy(prev_field[y], field[y], term_size.ws_col);
+	// copy current state to previous
+	memcpy(prev_field, field, buffer_size);
 }
 
 int main(void)
 {
 	// get console buffer size
+	static struct winsize term_size;
 	ioctl(STDOUT_FILENO, TIOCGWINSZ, &term_size);
+	width = term_size.ws_col;
+	height = term_size.ws_row - 1;
+	buffer_size = width * height;
 
 #ifndef SPEED_TEST
 	// initialize console
@@ -203,19 +205,11 @@ int main(void)
 
 	srand(time(0));
 
-	// last row is ommited to avoid jitter
-	term_size.ws_row -= 1;
-
 	// allocate game field memory
-	field = malloc(term_size.ws_row * sizeof(char *));
-	prev_field = malloc(term_size.ws_row * sizeof(char *));
-	for (ushort i = 0; i < term_size.ws_row; ++i) {
-		field[i] = malloc(term_size.ws_col);
-		prev_field[i] = malloc(term_size.ws_col);
-
-		memset(field[i], 0, term_size.ws_col);
-		memset(prev_field[i], 0, term_size.ws_col);
-	}
+	field = malloc(buffer_size);
+	prev_field = malloc(buffer_size);
+	memset(field, 0, buffer_size);
+	memset(prev_field, 0, buffer_size);
 
 	init_field();
 
