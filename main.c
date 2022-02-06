@@ -19,7 +19,7 @@
 #include <sys/ioctl.h>
 #include <stdatomic.h>
 
-#define ITERATIONS 50000
+#define ITERATIONS 100000
 
 typedef unsigned char bool;
 #define true (bool)1
@@ -66,14 +66,20 @@ static void my_exit(void)
 	free(field);
 	free(prev_field);
 
-#ifndef SPEED_TEST
+#ifdef SPEED_TEST
+	puts("\nGame of Life speed test");
+	printf("buffer size: %ux%u (%u cells total)\n",
+		width, height, buffer_size);
+	printf("iterations: %lu\n",
+		ITERATIONS);
+#else /* !SPEED_TEST */
 	// reset terminal IO
 	reset_termios();
 	// kill input catcher thread
 	pthread_kill(pthread_input_id, 0);
-#endif /* SPEED_TEST */
 	// move cursor to [1;1]
 	puts("\033[1;1H\033[J");
+#endif /* SPEED_TEST */
 	// exit program
 	exit(EXIT_SUCCESS);
 }
@@ -160,8 +166,10 @@ static inline ushort get_nneighbours(int x, int y)
 // iteration of game of life
 static inline void iteration()
 {
+#ifndef SPEED_TEST
 	// move cursor to [1;1]
 	puts("\033[1;1H\033[J");
+#endif /* SPEED_TEST */
 
 	for (ushort y = 0; y < height; ++y) {
 		for (ushort x = 0; x < width; ++x) {
@@ -172,11 +180,16 @@ static inline void iteration()
 			bool alive = get_cell(x, y) != ' ';
 			char c = ((n == 2 && alive) || n == 3) ? '#' : ' ';
 			field[y * height + x] = c;
+#ifdef SPEED_TEST
+		}
+	}
+#else /* !SPEED_TEST */
 			putchar(c);
 		}
 		putchar('\n');
 	}
 	putchar('\b');
+#endif /* SPEED_TEST */
 
 	// copy current state to previous
 	memcpy(prev_field, field, buffer_size);
@@ -218,8 +231,6 @@ int main(void)
 	for (size_t i = 0; i < ITERATIONS; ++i) {
 #else /* !SPEED_TEST */
 	while (keep_running) {
-#endif /* SPEED_TEST */
-#ifndef SPEED_TEST
 		// wait for thread to be unlocked
 		while (main_lock)
 			usleep(10);
